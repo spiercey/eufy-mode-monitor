@@ -1,0 +1,22 @@
+{
+  "name": "eufy-mode-monitor",
+  "version": "1.0.0",
+  "description": "Watches the mode of the homebase and sets the group control to allow Smart Display Tablets and Keypads to be used",
+  "author": "Stephen Piercey",
+  "type": "module",
+  "main": "index.ts",
+  "engines": {
+    "node": ">=24.5.0"
+  },
+  "scripts": {
+    "start": "node --env-file=.env index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@mega-yfue/eufy-sdk": "^0.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.5.2",
+    "typescript": "^5.9.2"
+  }
+}

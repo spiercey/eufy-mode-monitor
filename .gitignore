@@ -1,0 +1,4 @@
+node_modules/
+.env
+.eufy-session.json
+.eufy-captcha.png
