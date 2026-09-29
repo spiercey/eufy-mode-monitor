@@ -23,9 +23,29 @@ it just makes the displayed mode match reality.
 Everything account-specific (house, station, groups, user name) is discovered from the logged-in
 account at runtime, so the code contains no personal identifiers.
 
+## Authentication (no password on disk)
+
+The eufy SDK only needs your password for the **first** sign-in: it exchanges email + password for a
+session token and saves that token (not the password) to `.eufy-session.json`. Every later run loads
+that token and runs without the password.
+
+So the recommended setup keeps no password on disk:
+
+```sh
+npm run auth              # prompts for your password in memory, saves only the session token
+```
+
+Re-run `npm run auth` whenever the session expires (for example after you change your eufy password).
+If you'd rather have the tool re-authenticate automatically on expiry, set `EUFY_PASSWORD` in `.env`
+(that keeps the password on disk — a deliberate trade-off, off by default).
+
 ## Setup
 
-Requires Node.js ≥ 24.5 (runs TypeScript directly).
+Requires Node.js ≥ 24.5 (runs TypeScript directly). The installer runs **in place** from the cloned
+directory — nothing is copied elsewhere — so keep this folder where it is after installing; the
+systemd service points at it. If your system Node is older, the installer can use
+[nvm](https://github.com/nvm-sh/nvm) to install/select Node 24 without changing your system Node, and
+pins the service to that exact Node binary (an `.nvmrc` records the version for `nvm use`).
 
 ### Quick install (Linux, systemd)
 
@@ -33,22 +53,25 @@ Requires Node.js ≥ 24.5 (runs TypeScript directly).
 ./install.sh
 ```
 
-It prompts for your eufy email/password, writes `.env` and a default `guard.config.json`, installs
-dependencies, does the one-time interactive login (captcha / 2FA), and offers to install a systemd
-service that runs the sync at boot (`journalctl -u eufy-mode-sync -f` to watch it).
+It ensures a suitable Node (system Node if ≥24.5, otherwise via nvm), prompts for your eufy email (not
+password) and writes `.env` and a default `guard.config.json`, installs dependencies, then signs you
+in with `npm run auth` (password entered once, kept in memory, only the session token saved), and
+offers to install a systemd service that runs the sync at boot
+(`journalctl -u eufy-mode-sync -f` to watch it).
 
 ### Manual setup
 
 ```sh
 npm install
-cp .env.example .env      # then fill in EUFY_EMAIL / EUFY_PASSWORD / EUFY_COUNTRY
+cp .env.example .env      # then fill in EUFY_EMAIL / EUFY_COUNTRY (no password needed)
+npm run auth              # sign in once (captcha / 2FA), saves the session
 ```
 
-First run is interactive — it prompts for a captcha and/or 2FA code and saves the session to
+`npm run auth` is interactive — it prompts for a captcha and/or 2FA code and saves the session to
 `.eufy-session.json` (gitignored). Later runs reuse the session and run headless.
 
 ```sh
-npm run guard             # read current state (safe; verifies login/session)
+npm run guard             # read current state (safe; verifies the saved session)
 ```
 
 ## Usage
@@ -72,7 +95,9 @@ npm run guard leaving --allow-away   # activate Away (record only; gated behind 
 
 ### Run it permanently (systemd, Linux)
 
-`./install.sh` sets this up for you. To do it by hand, install a service like:
+`./install.sh` sets this up for you (pinning the exact Node binary it chose). To do it by hand, install
+a service like the following — set `WorkingDirectory` to your checkout and `ExecStart` to your Node's
+absolute path (`command -v node`, or the nvm path like `~/.nvm/versions/node/vXX.Y.Z/bin/node`):
 
 ```ini
 # /etc/systemd/system/eufy-mode-sync.service
@@ -81,13 +106,29 @@ Description=eufy Group Control resync
 After=network-online.target
 
 [Service]
-WorkingDirectory=/opt/eufy-mode-monitor
+WorkingDirectory=/path/to/eufy-mode-monitor
 ExecStart=/usr/bin/node --env-file=.env guard_sync.ts
 Restart=on-failure
 
 [Install]
 WantedBy=multi-user.target
 ```
+
+## Updating
+
+The app runs in place from the clone, so updating is a `git pull`. Code is TypeScript run directly (no
+build step), so a pull that only changes `.ts` files just needs a service restart. If the pull changes
+`package.json` (e.g. a new SDK version), run `npm install` first:
+
+```sh
+cd /path/to/eufy-mode-monitor
+git pull
+npm install                              # only needed when dependencies changed
+sudo systemctl restart eufy-mode-sync    # if running as a service
+```
+
+Your `.env`, `.eufy-session.json`, and `guard.config.json` are gitignored, so pulls never touch them.
+If a pull bumps the required Node version (`.nvmrc`), run `nvm install && nvm use` in the directory.
 
 ## Customizing the mode → group mapping
 
@@ -117,7 +158,8 @@ All via `.env` (see `.env.example`):
 
 | Var | Required | Default | Purpose |
 |---|---|---|---|
-| `EUFY_EMAIL` / `EUFY_PASSWORD` | yes | — | account login |
+| `EUFY_EMAIL` | yes | — | account email |
+| `EUFY_PASSWORD` | no | — | optional; set only if you want automatic re-auth on token expiry (keeps the password on disk). Otherwise use `npm run auth`. |
 | `EUFY_COUNTRY` | no | `CA` | account country code |
 | `GUARD_INTERVAL` | no | `60` | poll interval (seconds) for `guard_sync` |
 | `GUARD_HOUSE_ID` | no | default house | pin the house instead of auto-discovering |
@@ -127,11 +169,12 @@ All via `.env` (see `.env.example`):
 
 ## Files
 
-- `install.sh` — interactive installer (credentials, config, deps, login, systemd service).
+- `install.sh` — interactive installer (email, config, deps, `npm run auth` login, systemd service).
+- `auth.ts` — one-time interactive sign-in; password in memory only, saves the session token.
 - `guard_lib.ts` — shared logic: discovery, mode↔group mapping, the `setup_guard` body, retries.
 - `guard_sync.ts` — the periodic resync (daemon or `once`).
 - `guard_manual.ts` — manual read/set for testing.
-- `_client.ts` — login helper (captcha / 2FA), session persistence.
+- `_client.ts` — login helper (session-only or interactive captcha / 2FA), session persistence.
 - `guard.config.example.json` — template for the optional mode→group mapping.
 
 Never committed: `.env`, `.eufy-session.json`, `.eufy-captcha.png`, `guard.config.json` (all gitignored).

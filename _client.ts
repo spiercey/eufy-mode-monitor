@@ -1,10 +1,14 @@
 /**
- * Shared login helper: construct the client and drive captcha / 2FA to completion.
+ * Shared login helper.
  *
- * First run must be interactive (captcha or 2FA is answered in this process). Later runs reuse
- * `.eufy-session.json` and skip that.
+ * Two modes:
+ *  - Password present (from `npm run auth`, or EUFY_PASSWORD in .env): full interactive login, driving
+ *    captcha / 2FA to completion. The SDK saves the session to `.eufy-session.json`.
+ *  - Password absent: run entirely off the saved session — no password is read or needed. If the saved
+ *    session is missing/expired, it throws asking you to run `npm run auth`.
  *
- *   npm start
+ * This lets the sync run with no password on disk: sign in once with `npm run auth`, then only the
+ * session token lives in `.eufy-session.json`.
  */
 import { writeFileSync } from "node:fs";
 import path from "node:path";
@@ -21,17 +25,15 @@ const SESSION_FILE = path.join(import.meta.dirname, ".eufy-session.json");
 const CAPTCHA_FILE = path.join(import.meta.dirname, ".eufy-captcha.png");
 
 export async function loginClient(overrides: Partial<EufyMegaOptions> = {}): Promise<EufyMega> {
-  const email = process.env.EUFY_EMAIL?.trim();
-  const password = process.env.EUFY_PASSWORD;
-  if (!email || !password) {
-    throw new Error(
-      "EUFY_EMAIL and EUFY_PASSWORD must be set. Copy .env.example to .env, then run: npm start",
-    );
+  const email = (overrides.email ?? process.env.EUFY_EMAIL)?.trim();
+  const password = overrides.password ?? process.env.EUFY_PASSWORD;
+  if (!email) {
+    throw new Error("EUFY_EMAIL must be set. Copy .env.example to .env.");
   }
 
   const eufy = new EufyMega({
     email,
-    password,
+    password: password ?? "",
     countryCode: process.env.EUFY_COUNTRY || "CA",
     store: new FileSessionStore(SESSION_FILE),
     // List-devices does not need push / MQTT / P2P. Leave them off so login cannot hang on FCM.
@@ -40,6 +42,22 @@ export async function loginClient(overrides: Partial<EufyMegaOptions> = {}): Pro
     ...overrides,
   });
 
+  // Password-less mode: rely on the saved session written by `npm run auth`. The password is never
+  // read here, so it need not live on disk. (With no password the SDK also won't auto-reauth — it
+  // reports the session as expired instead, which is what we want.)
+  if (!password) {
+    const hydrated = !!(eufy.api as unknown as { auth?: unknown }).auth;
+    if (hydrated) {
+      const r = await eufy.login();
+      if (r.status === LoginStatus.Ok) return eufy;
+    }
+    throw new Error(
+      "No usable eufy session and EUFY_PASSWORD is not set. Run `npm run auth` to sign in once " +
+        "(your password is used only in memory and never written to disk).",
+    );
+  }
+
+  // Password mode (initial sign-in / re-auth): interactive captcha + 2FA.
   let r = await eufy.login();
   while (r.status !== LoginStatus.Ok) {
     if (r.status === LoginStatus.Captcha) {

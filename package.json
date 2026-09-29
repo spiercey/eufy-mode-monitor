@@ -10,6 +10,7 @@
   },
   "scripts": {
     "start": "node --env-file=.env index.ts",
+    "auth": "node --env-file-if-exists=.env auth.ts",
     "sync": "node --env-file=.env guard_sync.ts",
     "sync:once": "node --env-file=.env guard_sync.ts once",
     "guard": "node --env-file=.env guard_manual.ts",
