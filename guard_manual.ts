@@ -15,7 +15,7 @@
 import { loginClient } from "./_client.ts";
 import {
   activeGroup,
-  groupForMode,
+  groupByModeId,
   isAwayGroup,
   MODE,
   readGroups,
@@ -47,7 +47,7 @@ async function show(ctx: GuardContext, groups: Group[]): Promise<void> {
 
 function resolve(groups: Group[], ctx: GuardContext, token: string): Group | undefined {
   const t = token.toLowerCase();
-  if (t in ROLE_MODE) return groupForMode(groups, ctx.stationSn, ROLE_MODE[t]);
+  if (t in ROLE_MODE) return groupByModeId(groups, ctx.stationSn, ROLE_MODE[t]);
   return groups.find((g) => g.group_id === token) ?? groups.find((g) => g.group_name.toLowerCase() === t);
 }
 

@@ -27,6 +27,18 @@ account at runtime, so the code contains no personal identifiers.
 
 Requires Node.js ≥ 24.5 (runs TypeScript directly).
 
+### Quick install (Linux, systemd)
+
+```sh
+./install.sh
+```
+
+It prompts for your eufy email/password, writes `.env` and a default `guard.config.json`, installs
+dependencies, does the one-time interactive login (captcha / 2FA), and offers to install a systemd
+service that runs the sync at boot (`journalctl -u eufy-mode-sync -f` to watch it).
+
+### Manual setup
+
 ```sh
 npm install
 cp .env.example .env      # then fill in EUFY_EMAIL / EUFY_PASSWORD / EUFY_COUNTRY
@@ -60,7 +72,7 @@ npm run guard leaving --allow-away   # activate Away (record only; gated behind 
 
 ### Run it permanently (systemd, Linux)
 
-The daemon holds a session, or run `sync:once` on a timer. Example service:
+`./install.sh` sets this up for you. To do it by hand, install a service like:
 
 ```ini
 # /etc/systemd/system/eufy-mode-sync.service
@@ -77,6 +89,28 @@ Restart=on-failure
 WantedBy=multi-user.target
 ```
 
+## Customizing the mode → group mapping
+
+By default the mapping is discovered automatically: `guard_list` reports the `mode_id` each group puts
+the station into, and that is matched to the HomeBase mode (`param 1224`). Defaults: `6→Off`,
+`1→Home`, `0→Away`.
+
+To override or limit it, create `guard.config.json` (see `guard.config.example.json`):
+
+```json
+{
+  "modeToGroup": {
+    "6": "Off",
+    "1": "I'm Staying",
+    "0": "I'm Leaving"
+  }
+}
+```
+
+Values are a group **name** (as shown in the app) or a group **id**. When this file is present, **only
+the listed modes are synced** — remove a line to stop syncing that mode (e.g. drop `"0"` to never sync
+Away). If a name/id can't be found it falls back to auto-discovery. `guard.config.json` is gitignored.
+
 ## Configuration
 
 All via `.env` (see `.env.example`):
@@ -89,12 +123,15 @@ All via `.env` (see `.env.example`):
 | `GUARD_HOUSE_ID` | no | default house | pin the house instead of auto-discovering |
 | `GUARD_STATION_SN` | no | discovered | pin the guard station |
 | `GUARD_USER_NAME` | no | account name | change-log label on `setup_guard` |
+| `GUARD_CONFIG` | no | `./guard.config.json` | path to the mode→group mapping config |
 
 ## Files
 
+- `install.sh` — interactive installer (credentials, config, deps, login, systemd service).
 - `guard_lib.ts` — shared logic: discovery, mode↔group mapping, the `setup_guard` body, retries.
 - `guard_sync.ts` — the periodic resync (daemon or `once`).
 - `guard_manual.ts` — manual read/set for testing.
 - `_client.ts` — login helper (captcha / 2FA), session persistence.
+- `guard.config.example.json` — template for the optional mode→group mapping.
 
-Never committed: `.env`, `.eufy-session.json`, `.eufy-captcha.png` (all gitignored).
+Never committed: `.env`, `.eufy-session.json`, `.eufy-captcha.png`, `guard.config.json` (all gitignored).

@@ -37,7 +37,7 @@ async function syncOnce(ctx: GuardContext): Promise<void> {
     log("skip: could not read station guard mode (param 1224)");
     return;
   }
-  const target = groupForMode(groups, ctx.stationSn, mode);
+  const target = groupForMode(ctx, groups, mode);
   if (!target) {
     log(`skip: station mode ${mode} has no matching group`);
     return;

@@ -7,7 +7,13 @@
  *   GUARD_HOUSE_ID    pin the house      (default: the account's default house)
  *   GUARD_STATION_SN  pin the station    (default: the station referenced by the mode groups)
  *   GUARD_USER_NAME   change-log label   (default: the account name derived by the SDK)
+ *   GUARD_CONFIG      path to the mapping config (default: ./guard.config.json if present)
+ *
+ * The mode->group mapping is auto-discovered from each group's `mode_id`. A config file can override
+ * or limit it (see guard.config.example.json): when `modeToGroup` is set, ONLY those station modes are
+ * synced, each to the named/id'd group (falling back to auto-discovery if the name/id isn't found).
  */
+import { existsSync, readFileSync } from "node:fs";
 import { loginClient } from "./_client.ts";
 
 export const HOST = "security-app.eufylife.com";
@@ -27,7 +33,22 @@ export type GuardContext = {
   houseId: string;
   stationSn: string;
   userName: string;
+  /** From config: station mode (param 1224) -> group name or id. Empty = auto-discover all modes. */
+  modeOverride: Map<number, string>;
 };
+
+/** Optional mapping config (guard.config.json). Keys are station modes ("6"/"1"/"0"), values a group name or id. */
+type GuardConfig = { modeToGroup?: Record<string, string> };
+
+function loadConfig(): GuardConfig {
+  const path = process.env.GUARD_CONFIG?.trim() || "guard.config.json";
+  try {
+    if (existsSync(path)) return JSON.parse(readFileSync(path, "utf8")) as GuardConfig;
+  } catch (e) {
+    console.warn(`[guard] ignoring unreadable config ${path}: ${e instanceof Error ? e.message : String(e)}`);
+  }
+  return {};
+}
 
 /** Retry transient network failures (DNS blips surface as "fetch failed"); re-throw anything else. */
 export async function withRetry<T>(fn: () => Promise<T>, tries = 3, delayMs = 2000): Promise<T> {
@@ -84,7 +105,13 @@ export async function resolveContext(eufy: Eufy): Promise<GuardContext> {
   const groups = await readGroups(eufy, houseId);
   const stationSn = discoverStationSn(groups);
   const userName = process.env.GUARD_USER_NAME?.trim() || (eufy.api as unknown as { accountName?: string }).accountName || "";
-  return { eufy, houseId, stationSn, userName };
+
+  const modeOverride = new Map<number, string>();
+  for (const [k, v] of Object.entries(loadConfig().modeToGroup ?? {})) {
+    const n = Number(k);
+    if (Number.isFinite(n) && typeof v === "string" && v.trim()) modeOverride.set(n, v.trim());
+  }
+  return { eufy, houseId, stationSn, userName, modeOverride };
 }
 
 /** Read the station's real guard mode (param 1224) as a number, or undefined if unavailable. */
@@ -96,9 +123,27 @@ export async function readStationMode(ctx: GuardContext): Promise<number | undef
   return Number.isFinite(n) ? n : undefined;
 }
 
-/** The group that puts the station into `modeId` (param 1224 matched to each group's device mode_id). */
-export function groupForMode(groups: Group[], stationSn: string, modeId: number): Group | undefined {
+/** Auto-discovery: the group whose station device targets `modeId` (its declared mode_id). */
+export function groupByModeId(groups: Group[], stationSn: string, modeId: number): Group | undefined {
   return groups.find((g) => (g.devices ?? []).some((d) => d.device_sn === stationSn && d.mode_id === modeId));
+}
+
+/**
+ * The group to activate for station mode `modeId`, honoring the config override.
+ * With a config `modeToGroup`, only listed modes map (others return undefined => not synced); the value
+ * resolves by group id, then group name, then falls back to auto-discovery. Without config, auto-discover.
+ */
+export function groupForMode(ctx: GuardContext, groups: Group[], modeId: number): Group | undefined {
+  if (ctx.modeOverride.size > 0) {
+    const sel = ctx.modeOverride.get(modeId);
+    if (sel == null) return undefined; // mode not in the configured allow-list
+    return (
+      groups.find((g) => g.group_id === sel) ??
+      groups.find((g) => g.group_name.toLowerCase() === sel.toLowerCase()) ??
+      groupByModeId(groups, ctx.stationSn, modeId)
+    );
+  }
+  return groupByModeId(groups, ctx.stationSn, modeId);
 }
 
 /** Is this the Away / alarm-arming group (its station device targets AWAY_MODE_ID)? */

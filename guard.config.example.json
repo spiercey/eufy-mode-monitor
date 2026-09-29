@@ -1,0 +1,10 @@
+{
+  "//": "Optional. Maps the HomeBase guard mode (param 1224) to the Group Control group to activate.",
+  "//modes": "6 = Off, 1 = Home, 0 = Away. Values are a group NAME (as shown in the app) or a group id.",
+  "//behavior": "If this file is absent, all modes are auto-discovered from each group's mode_id. If present, ONLY the listed modes are synced (remove a line to stop syncing that mode, e.g. drop \"0\" to never sync Away).",
+  "modeToGroup": {
+    "6": "Off",
+    "1": "I'm Staying",
+    "0": "I'm Leaving"
+  }
+}
