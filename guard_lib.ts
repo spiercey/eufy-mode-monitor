@@ -16,8 +16,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { loginClient } from "./_client.ts";
 
-export const HOST = "security-app.eufylife.com";
-
 /** ArmingMode wire values (param 1224). Protocol constants, not account data. */
 export const MODE = { away: 0, home: 1, off: 6 } as const;
 /** "Away" is the alarm-arming mode; the group that targets it is gated in the manual tool. */
@@ -68,7 +66,7 @@ export async function withRetry<T>(fn: () => Promise<T>, tries = 3, delayMs = 20
 
 export async function readGroups(eufy: Eufy, houseId: string): Promise<Group[]> {
   const res = (await withRetry(() =>
-    eufy.api.postSigned(HOST, "/v3/house/guard_list", { house_id: houseId }, true),
+    eufy.api.securityAppPost("/v3/house/guard_list", { house_id: houseId }),
   )) as { groups?: Group[] };
   return res.groups ?? [];
 }
@@ -156,7 +154,12 @@ export function guardBody(ctx: GuardContext, groupId: string): Record<string, un
   return { house_id: ctx.houseId, group_id: groupId, user_name: ctx.userName, enable: true };
 }
 
-/** Activate a group. On success the server returns plaintext {code:0}, which decrypts to `undefined`. */
+/**
+ * Activate a group. On success the server returns plaintext {code:0}, which decrypts to `undefined`.
+ *
+ * Goes through the SDK's `securityAppPost`, which resolves the security-app host for the account's
+ * own region shard (`security-app.eufylife.com` for us, `security-app-<shard>.eufylife.com` elsewhere).
+ */
 export async function setGroup(ctx: GuardContext, groupId: string): Promise<unknown> {
-  return withRetry(() => ctx.eufy.api.postSigned(HOST, "/v3/house/setup_guard", guardBody(ctx, groupId), true));
+  return withRetry(() => ctx.eufy.api.securityAppPost("/v3/house/setup_guard", guardBody(ctx, groupId)));
 }
