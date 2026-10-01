@@ -178,3 +178,24 @@ All via `.env` (see `.env.example`):
 - `guard.config.example.json` — template for the optional mode→group mapping.
 
 Never committed: `.env`, `.eufy-session.json`, `.eufy-captcha.png`, `guard.config.json` (all gitignored).
+
+## Disclaimer
+
+This is an **unofficial** project and is **not affiliated with, endorsed by, or supported by Anker or
+eufy**. "eufy" and "Anker" are trademarks of their respective owners, used here only to describe
+interoperability.
+
+It works against eufy's private, undocumented cloud API, which can change at any time and may break
+this tool without notice. Using it may conflict with eufy's terms of service. It touches a live home
+security system — review what it does before running it, and use it at your own risk.
+
+Note that `guard_sync` only ever *mirrors* the HomeBase's real mode into the cloud Group Control
+record; it never changes the HomeBase's mode and so cannot arm or disarm anything. The manual tool
+(`guard_manual.ts`) can set the record directly and gates Away behind `--allow-away`.
+
+## License
+
+[Apache-2.0](./LICENSE) © 2026 Stephen Piercey. Contributions are accepted under the same license
+(inbound = outbound).
+
+Provided "AS IS", without warranties or conditions of any kind — see the license for the full terms.

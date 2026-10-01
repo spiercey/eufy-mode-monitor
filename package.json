@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Watches the mode of the homebase and sets the group control to allow Smart Display Tablets and Keypads to be used",
   "author": "Stephen Piercey",
+  "license": "Apache-2.0",
   "type": "module",
   "main": "index.ts",
   "engines": {
