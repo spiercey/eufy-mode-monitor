@@ -5,12 +5,11 @@
   "author": "Stephen Piercey",
   "license": "Apache-2.0",
   "type": "module",
-  "main": "index.ts",
+  "main": "guard_sync.ts",
   "engines": {
     "node": ">=24.5.0"
   },
   "scripts": {
-    "start": "node --env-file=.env index.ts",
     "auth": "node --env-file-if-exists=.env auth.ts",
     "sync": "node --env-file=.env guard_sync.ts",
     "sync:once": "node --env-file=.env guard_sync.ts once",
